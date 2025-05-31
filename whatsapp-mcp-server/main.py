@@ -1,4 +1,7 @@
 from typing import List, Dict, Any, Optional
+import asyncio
+import os
+from datetime import datetime
 from mcp.server.fastmcp import FastMCP
 from whatsapp import (
     search_contacts as whatsapp_search_contacts,
@@ -17,6 +20,9 @@ from whatsapp import (
 
 # Initialize FastMCP server
 mcp = FastMCP("whatsapp")
+
+# Track the timestamp of the last message we've seen
+last_check: Optional[str] = None
 
 @mcp.tool()
 def search_contacts(query: str) -> List[Dict[str, Any]]:
@@ -246,6 +252,39 @@ def download_media(message_id: str, chat_jid: str) -> Dict[str, Any]:
             "message": "Failed to download media"
         }
 
+
+async def poll_for_updates(interval: int = 30):
+    """Periodically check for new WhatsApp messages and trigger the client."""
+    global last_check
+    while True:
+        try:
+            new_msgs = whatsapp_list_messages(
+                after=last_check,
+                limit=1,
+                include_context=False,
+            )
+
+            if new_msgs and not new_msgs.startswith("No messages"):
+                first_line = new_msgs.splitlines()[0]
+                if first_line.startswith("[") and "]" in first_line:
+                    ts_part = first_line[1:first_line.find("]")]
+                    try:
+                        dt = datetime.strptime(ts_part, "%Y-%m-%d %H:%M:%S")
+                        last_check = dt.isoformat()
+                    except ValueError:
+                        pass
+                mcp.trigger("new_messages")
+        except Exception as exc:
+            print(f"Error polling for updates: {exc}")
+
+        await asyncio.sleep(interval)
+
+async def main() -> None:
+    """Start the MCP server and background polling task."""
+    interval = int(os.getenv("WHATSAPP_MCP_POLL_INTERVAL", "30"))
+    asyncio.create_task(poll_for_updates(interval))
+    await asyncio.to_thread(mcp.run, transport="stdio")
+
+
 if __name__ == "__main__":
-    # Initialize and run the server
-    mcp.run(transport='stdio')
+    asyncio.run(main())
