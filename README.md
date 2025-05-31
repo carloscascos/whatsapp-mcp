@@ -156,6 +156,12 @@ You can send various media types to your WhatsApp contacts:
 #### Media Downloading
 
 By default, just the metadata of the media is stored in the local database. The message will indicate that media was sent. To access this media you need to use the download_media tool which takes the `message_id` and `chat_jid` (which are shown when printing messages containing the meda), this downloads the media and then returns the file path which can be then opened or passed to another tool.
+### Automatic Triggers
+
+The server periodically checks for new WhatsApp messages and notifies the client
+with an MCP trigger. It checks every 30 seconds by default. Set the
+`WHATSAPP_MCP_POLL_INTERVAL` environment variable to adjust this interval.
+
 
 ## Technical Details
 
